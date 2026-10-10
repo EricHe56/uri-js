@@ -88,9 +88,13 @@ const handler:URISchemeHandler<MailtoComponents> =  {
 
 				switch (hfield[0]) {
 					case "to":
-						const toAddrs = hfield[1].split(",");
-						for (let x = 0, xl = toAddrs.length; x < xl; ++x) {
-							to.push(toAddrs[x]);
+						//CVE-2026-103387: a bare "to" header (e.g. "mailto:?to") has no value,
+						//so hfield[1] is undefined and must not be dereferenced.
+						if (hfield[1] !== undefined) {
+							const toAddrs = hfield[1].split(",");
+							for (let x = 0, xl = toAddrs.length; x < xl; ++x) {
+								to.push(toAddrs[x]);
+							}
 						}
 						break;
 					case "subject":

@@ -1,4 +1,4 @@
-/** @license URI.js v4.4.1 (c) 2011 Gary Court. License: http://github.com/garycourt/uri-js */
+/** @license URI.js v4.4.1-patch.1 (c) 2011 Gary Court. License: http://github.com/garycourt/uri-js */
 (function (global, factory) {
 	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
 	typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -708,7 +708,7 @@ var punycode = {
 /**
  * URI.js
  *
- * @fileoverview An RFC 3986 compliant, scheme extendable URI parsing/validating/resolving library for JavaScript.
+ * @fileoverview An RFC 3986 compliant, scheme extendable URI parsing/normalizing/resolving/serializing library for JavaScript.
  * @author <a href="mailto:gary.court@gmail.com">Gary Court</a>
  * @see http://github.com/garycourt/uri-js
  */
@@ -971,7 +971,10 @@ function _recomposeAuthority(components, options) {
 var RDS1 = /^\.\.?\//;
 var RDS2 = /^\/\.(\/|$)/;
 var RDS3 = /^\/\.\.(\/|$)/;
-var RDS5 = /^\/?(?:.|\n)*?(?=\/|$)/;
+//CVE-2026-93690: "." and "\n" do not match U+2028/U+2029, which allowed RDS5 to
+//match the empty string and kept the loop below from ever shortening its input.
+//"[\s\S]" matches every code unit, so every match consumes at least one character.
+var RDS5 = /^\/?(?:[\s\S])*?(?=\/|$)/;
 function removeDotSegments(input) {
     var output = [];
     while (input.length) {
@@ -986,7 +989,9 @@ function removeDotSegments(input) {
             input = "";
         } else {
             var im = input.match(RDS5);
-            if (im) {
+            //CVE-2026-93690: require a non-empty match so that the loop can never
+            //spin without consuming input (defense in depth for the guard above).
+            if (im && im[0].length) {
                 var s = im[0];
                 input = input.slice(s.length);
                 output.push(s);
@@ -1284,9 +1289,13 @@ var handler$4 = {
                 var hfield = hfields[x].split("=");
                 switch (hfield[0]) {
                     case "to":
-                        var toAddrs = hfield[1].split(",");
-                        for (var _x = 0, _xl = toAddrs.length; _x < _xl; ++_x) {
-                            to.push(toAddrs[_x]);
+                        //CVE-2026-103387: a bare "to" header (e.g. "mailto:?to") has no value,
+                        //so hfield[1] is undefined and must not be dereferenced.
+                        if (hfield[1] !== undefined) {
+                            var toAddrs = hfield[1].split(",");
+                            for (var _x = 0, _xl = toAddrs.length; _x < _xl; ++_x) {
+                                to.push(toAddrs[_x]);
+                            }
                         }
                         break;
                     case "subject":

@@ -1,7 +1,7 @@
 /**
  * URI.js
  *
- * @fileoverview An RFC 3986 compliant, scheme extendable URI parsing/validating/resolving library for JavaScript.
+ * @fileoverview An RFC 3986 compliant, scheme extendable URI parsing/normalizing/resolving/serializing library for JavaScript.
  * @author <a href="mailto:gary.court@gmail.com">Gary Court</a>
  * @see http://github.com/garycourt/uri-js
  */
@@ -281,7 +281,10 @@ const RDS1 = /^\.\.?\//;
 const RDS2 = /^\/\.(\/|$)/;
 const RDS3 = /^\/\.\.(\/|$)/;
 const RDS4 = /^\.\.?$/;
-const RDS5 = /^\/?(?:.|\n)*?(?=\/|$)/;
+//CVE-2026-93690: "." and "\n" do not match U+2028/U+2029, which allowed RDS5 to
+//match the empty string and kept the loop below from ever shortening its input.
+//"[\s\S]" matches every code unit, so every match consumes at least one character.
+const RDS5 = /^\/?(?:[\s\S])*?(?=\/|$)/;
 export function removeDotSegments(input) {
     const output = [];
     while (input.length) {
@@ -300,7 +303,9 @@ export function removeDotSegments(input) {
         }
         else {
             const im = input.match(RDS5);
-            if (im) {
+            //CVE-2026-93690: require a non-empty match so that the loop can never
+            //spin without consuming input (defense in depth for the guard above).
+            if (im && im[0].length) {
                 const s = im[0];
                 input = input.slice(s.length);
                 output.push(s);

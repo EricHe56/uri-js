@@ -902,3 +902,32 @@ if (URI.SCHEMES["wss"]) {
 	});
 
 }
+
+//
+// Security regressions
+//
+
+test("Malformed mailto header does not throw (CVE-2026-103387)", function () {
+	var components;
+
+	//a bare "to" header has no value, so it must be ignored instead of crashing
+	components = URI.parse("mailto:?to");
+	strictEqual(components.error, undefined, "no error");
+	deepEqual(components.to, [], "bare 'to' header is ignored");
+
+	components = URI.parse("mailto:a@b.com?to");
+	strictEqual(components.error, undefined, "no error");
+	deepEqual(components.to, ["a@b.com"], "address before the query is kept");
+
+	strictEqual(URI.normalize("mailto:?to"), "mailto:", "normalize does not throw");
+});
+
+test("Unicode line separators do not hang removeDotSegments (CVE-2026-93690)", function () {
+	var IRI_OPTIONS = { iri : true, unicodeSupport : true };
+
+	strictEqual(URI.removeDotSegments("/\u2028abc"), "/\u2028abc", "U+2028 path segment");
+	strictEqual(URI.removeDotSegments("/a/../\u2029b"), "/\u2029b", "U+2029 after dot segments");
+	strictEqual(URI.normalize("http://a/b/\u2028c", IRI_OPTIONS), "http://a/b/\u2028c", "normalize with U+2028");
+	strictEqual(URI.normalize("http://a/b/\u2029c", IRI_OPTIONS), "http://a/b/\u2029c", "normalize with U+2029");
+	strictEqual(URI.resolve("http://a/b/", "/\u2028c", IRI_OPTIONS), "http://a/\u2028c", "resolve with U+2028");
+});
